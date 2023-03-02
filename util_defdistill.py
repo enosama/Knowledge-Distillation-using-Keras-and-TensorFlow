@@ -7,7 +7,7 @@ Created on Thu Mar  3 11:46:49 2022
 """
 import keras
 import tensorflow as tf
-from keras.applications.resnet50 import ResNet50
+from tensorflow.keras.applications.resnet50 import ResNet50
 from keras.preprocessing.image import ImageDataGenerator
 from keras.losses import kullback_leibler_divergence
 
