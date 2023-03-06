@@ -7,10 +7,6 @@ Created on Thu Mar  3 11:46:49 2022
 """
 import keras
 import tensorflow as tf
-from tensorflow.keras.applications.resnet50 import ResNet50
-from keras.preprocessing.image import ImageDataGenerator
-from keras.losses import kullback_leibler_divergence
-
 
 class Distiller(keras.Model):
     def __init__(self, student, teacher):
@@ -46,12 +42,18 @@ class Distiller(keras.Model):
 
             # Compute losses
             student_loss = self.student_loss_fn(y, student_predictions)
-            distillation_loss = self.distillation_loss_fn(
-                tf.nn.softmax(teacher_predictions / self.temperature, axis=1),
-                tf.nn.softmax(student_predictions / self.temperature, axis=1),
-            )
-            loss = self.alpha * student_loss + \
-                (1 - self.alpha) * distillation_loss
+
+            # Try different distillation loss functions
+            # distillation_loss = self.distillation_loss_fn(
+            #     tf.nn.softmax(teacher_predictions / self.temperature, axis=1),
+            #     tf.nn.softmax(student_predictions / self.temperature, axis=1),
+            # )
+
+            # Use mean squared error loss for distillation loss
+            distillation_loss = tf.reduce_mean(tf.square(tf.subtract(tf.nn.softmax(teacher_predictions, axis=1), tf.nn.softmax(student_predictions, axis=1))))
+
+            # Adjust alpha hyperparameter based on the relative importance of student_loss vs distillation_loss
+            loss = self.alpha * student_loss + (1 - self.alpha) * distillation_loss
 
         # Compute gradients
         trainable_vars = self.student.trainable_variables
@@ -87,40 +89,3 @@ class Distiller(keras.Model):
         results = {m.name: m.result() for m in self.metrics}
         results.update({"student_loss": student_loss})
         return results
-
-
-    # Load the dataset
-(x_train, y_train), (x_test, y_test) = tf.keras.datasets.cifar10.load_data()
-
-# Preprocess the data
-x_train = x_train.astype("float32") / 255.0
-x_test = x_test.astype("float32") / 255.0
-y_train = tf.keras.utils.to_categorical(y_train, num_classes=10)
-y_test = tf.keras.utils.to_categorical(y_test, num_classes=10)
-
-# Define the optimizer
-optimizer = tf.keras.optimizers.Adam()
-
-# Define the loss functions
-student_loss_fn = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
-distillation_loss_fn = tf.keras.losses.KLDivergence()
-
-# Compile the model
-distiller = Distiller(student=student_model, teacher=teacher_model)
-distiller.compile(
-    optimizer=optimizer,
-    metrics=["accuracy"],
-    student_loss_fn=student_loss_fn,
-    distillation_loss_fn=distillation_loss_fn,
-    alpha=0.1,
-    temperature=3,
-)
-
-# Train the model
-distiller.fit(
-    x_train,
-    y_train,
-    epochs=10,
-    validation_data=(x_test, y_test),
-    batch_size=128,
-)
